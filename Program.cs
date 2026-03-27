@@ -76,23 +76,35 @@ internal class Program
                 md.AppendLine();
                 break;
             case "ul":
-                foreach (var li in node.SelectNodes("li"))
+                foreach (var li in node.SelectNodes("./li") ?? Enumerable.Empty<HtmlNode>())
                     ConvertNode(li, md, listLevel + 1);
-                md.AppendLine();
+                if (listLevel == 0)
+                    md.AppendLine();
                 break;
             case "ol":
                 var index = 1;
-                foreach (var li in node.SelectNodes("li"))
+                foreach (var li in node.SelectNodes("./li") ?? Enumerable.Empty<HtmlNode>())
                 {
                     md.Append(new string(' ', listLevel * 2));
-                    md.AppendLine($"{index}. {li.InnerText.Trim()}");
+                    md.AppendLine($"{index}. {GetDirectText(li)}");
+                    foreach (var child in li.ChildNodes)
+                    {
+                        if (child.Name is "ul" or "ol")
+                            ConvertNode(child, md, listLevel + 1);
+                    }
                     index++;
                 }
-                md.AppendLine();
+                if (listLevel == 0)
+                    md.AppendLine();
                 break;
             case "li":
                 md.Append(new string(' ', (listLevel - 1) * 2));
-                md.AppendLine($"- {node.InnerText.Trim()}");
+                md.AppendLine($"- {GetDirectText(node)}");
+                foreach (var child in node.ChildNodes)
+                {
+                    if (child.Name is "ul" or "ol")
+                        ConvertNode(child, md, listLevel);
+                }
                 break;
             case "blockquote":
                 foreach (var child in node.ChildNodes)
@@ -150,6 +162,21 @@ internal class Program
                     ConvertNode(child, md, listLevel);
                 break;
         }
+    }
+
+    private static string GetDirectText(HtmlNode node)
+    {
+        var sb = new StringBuilder();
+        foreach (var child in node.ChildNodes)
+        {
+            if (child.Name is "ul" or "ol")
+                continue; // skip nested lists
+            if (child.NodeType == HtmlNodeType.Text)
+                sb.Append(child.InnerText);
+            else if (child.Name is not "ul" and not "ol")
+                sb.Append(child.InnerText);
+        }
+        return sb.ToString().Trim();
     }
 
     private static string ExtractCodeLanguage(HtmlNode preNode)
