@@ -69,7 +69,17 @@ internal class Program
             case "pre":
                 var lang = ExtractCodeLanguage(node);
                 var codeNode = node.SelectSingleNode(".//code");
-                var codeText = codeNode != null ? codeNode.InnerText : node.InnerText;
+                string codeText;
+                if (codeNode != null)
+                {
+                    codeText = codeNode.InnerText;
+                }
+                else
+                {
+                    // ChatGPT uses a CodeMirror-style viewer: <div class="cm-content"> with <span>/<br> children
+                    var cmContent = node.SelectSingleNode(".//*[contains(@class,'cm-content')]");
+                    codeText = cmContent != null ? ExtractTextWithBreaks(cmContent) : node.InnerText;
+                }
                 md.AppendLine($"```{lang}");
                 md.AppendLine(codeText.Trim());
                 md.AppendLine("```");
@@ -164,6 +174,21 @@ internal class Program
         }
     }
 
+    private static string ExtractTextWithBreaks(HtmlNode node)
+    {
+        var sb = new StringBuilder();
+        foreach (var child in node.ChildNodes)
+        {
+            if (child.Name == "br")
+                sb.AppendLine();
+            else if (child.NodeType == HtmlNodeType.Text)
+                sb.Append(WebUtility.HtmlDecode(child.InnerText));
+            else
+                sb.Append(WebUtility.HtmlDecode(child.InnerText));
+        }
+        return sb.ToString();
+    }
+
     private static string GetDirectText(HtmlNode node)
     {
         var sb = new StringBuilder();
@@ -183,7 +208,8 @@ internal class Program
     {
         // ChatGPT puts the language label in a div like:
         // <div class="flex items-center text-token-text-secondary ...">pgsql</div>
-        var labelDiv = preNode.SelectSingleNode(".//div[contains(@class,'text-token-text-secondary')]");
+        var labelDiv = preNode.SelectSingleNode(".//div[contains(@class,'text-token-text-secondary')]")
+                      ?? preNode.SelectSingleNode(".//div[contains(@class,'text-token-text-primary')]");
         if (labelDiv != null)
         {
             // The label div may contain child elements (like the copy button sibling),
